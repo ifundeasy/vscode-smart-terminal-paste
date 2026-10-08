@@ -1,0 +1,62 @@
+{
+  "name": "smart-terminal-paste",
+  "displayName": "Smart Terminal Paste",
+  "description": "One Ctrl+V for the integrated terminal on Linux: pastes text, or forwards Ctrl+V to the running program when the clipboard holds an image (e.g. Claude Code image paste).",
+  "version": "0.1.0",
+  "publisher": "ifundeasy",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ifundeasy/vscode-smart-terminal-paste.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ifundeasy/vscode-smart-terminal-paste/issues"
+  },
+  "homepage": "https://github.com/ifundeasy/vscode-smart-terminal-paste#readme",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "terminal",
+    "paste",
+    "clipboard",
+    "image",
+    "claude code",
+    "remote ssh"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "smartTerminalPaste.paste",
+        "title": "Smart Terminal Paste: Paste"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "smartTerminalPaste.paste",
+        "key": "ctrl+v",
+        "when": "terminalFocus && isLinux"
+      }
+    ],
+    "configuration": {
+      "title": "Smart Terminal Paste",
+      "properties": {
+        "smartTerminalPaste.autoConfigure": {
+          "type": "boolean",
+          "default": true,
+          "description": "On startup, add smartTerminalPaste.paste to terminal.integrated.commandsToSkipShell (user settings) so Ctrl+V reaches this extension instead of the shell."
+        }
+      }
+    }
+  }
+}

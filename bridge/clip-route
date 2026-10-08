@@ -1,0 +1,41 @@
+#!/bin/sh
+# clipbridge: clip-route
+# Decides whether a clipboard operation on this host (the SSH server) should be served
+# by the clipboard of the machine you are sitting at (the "client").
+#   exit 0 -> use the client's clipboard (over SSH)
+#   exit 1 -> use this host's own clipboard
+# Config: ~/.config/clipbridge/config (see bridge/config.example)
+CONF="${CLIPBRIDGE_CONFIG:-$HOME/.config/clipbridge/config}"
+# shellcheck disable=SC1090
+[ -r "$CONF" ] && . "$CONF"
+[ -n "${CLIPBRIDGE_HOST:-}" ] && [ -n "${CLIPBRIDGE_CLIENT_IPS:-}" ] || exit 1
+
+# Rule 1: a process with no display that came in over SSH from the client
+# (e.g. a terminal opened by VS Code Remote-SSH).
+if [ -n "${SSH_CONNECTION:-}" ] && [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
+  src=${SSH_CONNECTION%% *}
+  for ip in $CLIPBRIDGE_CLIENT_IPS; do [ "$src" = "$ip" ] && exit 0; done
+  exit 1
+fi
+
+# Rule 2: a process that carries this host's own desktop environment, e.g. a session
+# run by a background supervisor that you are viewing from the client. Use the client
+# only if (a) the client holds a live SSH connection to this host AND (b) this host's
+# GNOME desktop has been idle for more than CLIPBRIDGE_IDLE_MS, i.e. the keystroke did
+# not come from this host's own keyboard. Disable with CLIPBRIDGE_DESKTOP_RULE=0.
+[ "${CLIPBRIDGE_DESKTOP_RULE:-1}" = 1 ] || exit 1
+
+port=${CLIPBRIDGE_SSH_PORT:-22}
+peers=$(ss -Htn state established "( sport = :$port )" 2>/dev/null | awk '{print $4}')
+connected=1
+for ip in $CLIPBRIDGE_CLIENT_IPS; do
+  printf '%s\n' "$peers" | grep -qE "^\[?$ip\]?:" && connected=0
+done
+[ "$connected" = 0 ] || exit 1
+
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+idle=$(timeout 2 gdbus call --session --dest org.gnome.Mutter.IdleMonitor \
+  --object-path /org/gnome/Mutter/IdleMonitor/Core \
+  --method org.gnome.Mutter.IdleMonitor.GetIdletime 2>/dev/null | tr -dc '0-9')
+[ -n "$idle" ] && [ "$idle" -gt "${CLIPBRIDGE_IDLE_MS:-4000}" ] && exit 0
+exit 1

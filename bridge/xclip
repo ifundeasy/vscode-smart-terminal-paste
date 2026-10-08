@@ -1,0 +1,29 @@
+#!/bin/sh
+# clipbridge: xclip shim
+# When clip-route says you are on the client machine, clipboard reads (-o) come from
+# and writes (stdin) go to the client's clipboard over SSH. Writes with file arguments,
+# -version/-help, and everything when you are at this host run the real xclip.
+REAL=${CLIPBRIDGE_REAL_XCLIP:-/usr/bin/xclip}
+BIN=$(dirname "$0")
+
+is_read=0; has_file=0; skip_next=0; passthru=0
+for a in "$@"; do
+  if [ "$skip_next" = 1 ]; then skip_next=0; continue; fi
+  case "$a" in
+    -o|-out) is_read=1 ;;
+    -selection|-sel|-t|-target|-d|-display|-l|-loops) skip_next=1 ;;
+    -version|-h|-help) passthru=1 ;;
+    -*) ;;
+    *) has_file=1 ;;
+  esac
+done
+
+if [ "$passthru" = 0 ] && { [ "$is_read" = 1 ] || [ "$has_file" = 0 ]; } && "$BIN/clip-route"; then
+  if [ "$is_read" = 1 ]; then
+    exec "$BIN/clipbridge-ssh" xclip "$@"
+  fi
+  # Input mode: xclip forks to serve the selection; send its output away so the SSH
+  # channel closes and the caller is not kept waiting.
+  exec "$BIN/clipbridge-ssh" sh -c 'exec xclip "$@" >/dev/null 2>&1' xclip "$@"
+fi
+exec "$REAL" "$@"

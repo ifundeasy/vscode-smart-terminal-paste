@@ -1,0 +1,21 @@
+#!/bin/sh
+# clipbridge: wl-paste shim
+# - When clip-route says you are on the client machine: read the client's clipboard
+#   over SSH.
+# - In an SSH session without a display from anywhere else: fail fast. The real
+#   wl-paste can hang there, which leaves apps waiting forever (e.g. "Pasting...").
+# - Otherwise: the real wl-paste, bounded by a timeout. On GNOME it can also hang when
+#   called from a background process. --watch keeps no timeout.
+REAL=${CLIPBRIDGE_REAL_WL_PASTE:-/usr/bin/wl-paste}
+BIN=$(dirname "$0")
+
+if "$BIN/clip-route"; then
+  exec "$BIN/clipbridge-ssh" timeout 5 wl-paste "$@"
+fi
+
+if [ -n "${SSH_CONNECTION:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then
+  exit 1
+fi
+
+for a in "$@"; do case "$a" in -w|--watch) exec "$REAL" "$@" ;; esac; done
+exec timeout "${CLIPBRIDGE_LOCAL_TIMEOUT:-3}" "$REAL" "$@"

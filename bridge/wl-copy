@@ -1,0 +1,29 @@
+#!/bin/sh
+# clipbridge: wl-copy shim
+# When clip-route says you are on the client machine, the text (stdin, or the text
+# arguments) goes to the client's clipboard over SSH. It uses xclip on the client's
+# X/XWayland display; GNOME syncs that to the Wayland clipboard. Otherwise: the real
+# wl-copy.
+REAL=${CLIPBRIDGE_REAL_WL_COPY:-/usr/bin/wl-copy}
+BIN=$(dirname "$0")
+
+if "$BIN/clip-route"; then
+  sel=clipboard; clear=0; words=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -p|--primary) sel=primary ;;
+      -c|--clear) clear=1 ;;
+      -t|--type|-s|--seat) shift ;;           # options that take a value
+      --) shift; words="$*"; break ;;
+      -*) ;;                                   # other flags do not matter here
+      *) words="$*"; break ;;                  # text given as arguments
+    esac
+    shift
+  done
+  set -- "$BIN/clipbridge-ssh" sh -c 'exec xclip -selection "$1" -i >/dev/null 2>&1' xclip "$sel"
+  if [ "$clear" = 1 ]; then printf '' | "$@"; exit $?
+  elif [ -n "$words" ]; then printf '%s' "$words" | "$@"; exit $?
+  else exec "$@"                               # stdin passes straight through
+  fi
+fi
+exec "$REAL" "$@"
