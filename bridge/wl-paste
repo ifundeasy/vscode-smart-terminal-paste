@@ -1,21 +1,41 @@
 #!/bin/sh
 # clipbridge: wl-paste shim
-# - When clip-route says you are on the client machine: read the client's clipboard
-#   over SSH.
+# - When clip-route says you are on your machine (the client): read your machine's
+#   clipboard through clipbridge-ssh (list types, or one type; text by default).
 # - In an SSH session without a display from anywhere else: fail fast. The real
 #   wl-paste can hang there, which leaves apps waiting forever (e.g. "Pasting...").
 # - Otherwise: the real wl-paste, bounded by a timeout. On GNOME it can also hang when
-#   called from a background process. --watch keeps no timeout.
+#   called from a background process. --watch keeps no timeout and is never forwarded.
 REAL=${CLIPBRIDGE_REAL_WL_PASTE:-/usr/bin/wl-paste}
 BIN=$(dirname "$0")
 
-if "$BIN/clip-route"; then
-  exec "$BIN/clipbridge-ssh" timeout 5 wl-paste "$@"
+sel=clipboard; list=0; type=""; watch=0; want=""
+for a in "$@"; do
+  if [ -n "$want" ]; then
+    [ "$want" = type ] && type=$a
+    want=""; continue
+  fi
+  case "$a" in
+    -p|--primary) sel=primary ;;
+    -l|--list-types) list=1 ;;
+    -t|--type) want=type ;;
+    --type=*) type=${a#--type=} ;;
+    -s|--seat) want=skip ;;
+    -w|--watch) watch=1 ;;
+  esac
+done
+
+if [ "$watch" = 0 ] && "$BIN/clip-route"; then
+  if [ "$list" = 1 ]; then exec "$BIN/clipbridge-ssh" targets "$sel"; fi
+  case "$type" in
+    ""|text|text/plain) exec "$BIN/clipbridge-ssh" get "$sel" UTF8_STRING ;;
+    *) exec "$BIN/clipbridge-ssh" get "$sel" "$type" ;;
+  esac
 fi
 
 if [ -n "${SSH_CONNECTION:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then
   exit 1
 fi
 
-for a in "$@"; do case "$a" in -w|--watch) exec "$REAL" "$@" ;; esac; done
+[ "$watch" = 1 ] && exec "$REAL" "$@"
 exec timeout "${CLIPBRIDGE_LOCAL_TIMEOUT:-3}" "$REAL" "$@"

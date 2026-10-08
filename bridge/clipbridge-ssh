@@ -1,22 +1,17 @@
 #!/bin/sh
-# clipbridge: clipbridge-ssh <tool> [args...]
-# Runs a clipboard tool (xclip / wl-paste / wl-copy) on the client machine over SSH,
-# with the client's desktop environment set up. stdin/stdout pass straight through.
+# clipbridge: clipbridge-ssh <request> [args...]
+# Sends one clipboard request (ping | targets SEL | get SEL TYPE | set SEL) to your
+# machine over SSH, using the dedicated clipbridge key. On your machine that key is
+# locked to clipbridge-serve, which validates the request; nothing else can run.
+# stdin/stdout pass straight through.
 # Config: ~/.config/clipbridge/config (see bridge/config.example)
 CONF="${CLIPBRIDGE_CONFIG:-$HOME/.config/clipbridge/config}"
 # shellcheck disable=SC1090
 [ -r "$CONF" ] && . "$CONF"
 [ -n "${CLIPBRIDGE_HOST:-}" ] || { echo "clipbridge: CLIPBRIDGE_HOST not set in $CONF" >&2; exit 1; }
+KEY="${CLIPBRIDGE_KEY:-$HOME/.ssh/clipbridge_ed25519}"
 
-# Quote every argument for the remote shell.
-cmd=""
-for a in "$@"; do cmd="$cmd '$(printf %s "$a" | sed "s/'/'\\\\''/g")'"; done
-
-# On the client: find an X authority (GNOME's XWayland file, else ~/.Xauthority) and
-# point both X11 and Wayland clipboard tools at the logged-in desktop session.
-env_setup='XA=$(ls /run/user/$(id -u)/.mutter-Xwaylandauth.* 2>/dev/null | head -1); [ -n "$XA" ] || XA=$HOME/.Xauthority;'
-env_setup="$env_setup export DISPLAY='${CLIPBRIDGE_CLIENT_DISPLAY:-:0}' XAUTHORITY=\"\$XA\" WAYLAND_DISPLAY='${CLIPBRIDGE_CLIENT_WAYLAND_DISPLAY:-wayland-0}' XDG_RUNTIME_DIR=/run/user/\$(id -u);"
-
-exec ssh -o BatchMode=yes -o ConnectTimeout="${CLIPBRIDGE_CONNECT_TIMEOUT:-4}" \
-  -o ControlMaster=auto -o ControlPath="$HOME/.ssh/cm-clipbridge-%C" -o ControlPersist=600 \
-  "$CLIPBRIDGE_HOST" "$env_setup exec${cmd}"
+exec ssh -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes \
+  -o ConnectTimeout="${CLIPBRIDGE_CONNECT_TIMEOUT:-4}" \
+  -o ControlMaster=auto -o ControlPath="$HOME/.ssh/cm-clipbridge-v2-%C" -o ControlPersist=600 \
+  "$CLIPBRIDGE_HOST" "$*"

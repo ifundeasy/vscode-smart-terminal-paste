@@ -18,7 +18,7 @@ This extension decides on the VS Code side, where the clipboard lives. Text goes
 Download the `.vsix` from [Releases](https://github.com/ifundeasy/vscode-smart-terminal-paste/releases), then run:
 
 ```sh
-code --install-extension smart-terminal-paste-0.1.0.vsix
+code --install-extension smart-terminal-paste-0.2.0.vsix
 ```
 
 Then reload the window: Command Palette → **Developer: Reload Window**.
@@ -36,7 +36,7 @@ For image paste **and** selection copy across SSH, install the server-side bridg
 
 ```sh
 # on the SSH server
-sh bridge/install.sh --host <your-machine> --client-ip <your-ip-as-seen-by-the-server>
+sh bridge/install.sh --host <your-machine> --client-ip <your-ip-as-seen-by-the-server> --setup-client
 ```
 
 ## Repository layout
@@ -44,7 +44,7 @@ sh bridge/install.sh --host <your-machine> --client-ip <your-ip-as-seen-by-the-s
 | Path | What |
 |---|---|
 | `extension.js`, `package.json` | the VS Code extension (runs on your machine) |
-| `bridge/` | clipboard bridge for the SSH server: `xclip` / `wl-paste` / `wl-copy` shims, `clip-route`, `clipbridge-ssh`, `install.sh`, `uninstall.sh`, `config.example` |
+| `bridge/` | clipboard bridge: server shims (`xclip` / `wl-paste` / `wl-copy`, `clip-route`, `clipbridge-ssh`), client forced command (`clipbridge-serve`), `install.sh` / `install-client.sh` / `uninstall.sh`, `config.example` |
 | `docs/remote-clipboard.md` | setup tutorial for the bridge |
 | `scripts/package.py` | builds the `.vsix` with no dependencies |
 

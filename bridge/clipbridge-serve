@@ -1,0 +1,72 @@
+#!/bin/sh
+# clipbridge: clipbridge-serve
+# Runs on YOUR machine (the client) as the forced command of the dedicated clipbridge key
+# in ~/.ssh/authorized_keys, so the server can only do clipboard operations, never run
+# anything else. Accepted requests (in SSH_ORIGINAL_COMMAND):
+#   ping
+#   targets <clipboard|primary>                      list available formats
+#   get     <clipboard|primary> <type>               print the clipboard in one format
+#   set     <clipboard|primary>                      replace the clipboard with stdin
+# <type> is a MIME type (image/png, text/plain;charset=utf-8, ...) or TEXT/STRING/UTF8_STRING.
+# Example authorized_keys line (install.sh --setup-client / install-client.sh write it):
+#   restrict,command="/home/you/.local/bin/clipbridge-serve",from="100.64.0.1" ssh-ed25519 AAAA... clipbridge@server
+set -u
+
+deny() { echo "clipbridge-serve: denied: $*" >&2; exit 1; }
+sel_ok() { case "$1" in clipboard|primary) return 0 ;; *) return 1 ;; esac; }
+type_ok() {
+  printf '%s' "$1" | grep -qE '^([A-Za-z0-9][A-Za-z0-9.+_-]*/[A-Za-z0-9][A-Za-z0-9.+_;=-]*|TEXT|STRING|UTF8_STRING)$'
+}
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# Split the request into words with globbing off, so a request can never expand to
+# file names, then turn globbing back on for the code below.
+set -f
+# shellcheck disable=SC2086
+set -- ${SSH_ORIGINAL_COMMAND:-}
+set +f
+[ $# -ge 1 ] || deny "empty request"
+verb=$1; shift
+
+uid=$(id -u)
+XA=$(ls "/run/user/$uid"/.mutter-Xwaylandauth.* 2>/dev/null | head -1)
+[ -n "$XA" ] || XA="$HOME/.Xauthority"
+export DISPLAY="${CLIPBRIDGE_DISPLAY:-:0}" XAUTHORITY="$XA" \
+  WAYLAND_DISPLAY="${CLIPBRIDGE_WAYLAND_DISPLAY:-wayland-0}" XDG_RUNTIME_DIR="/run/user/$uid"
+
+case "$verb" in
+  ping)
+    [ $# -eq 0 ] || deny "ping takes no arguments"
+    echo "clipbridge-serve ok"
+    ;;
+  targets)
+    { [ $# -eq 1 ] && sel_ok "$1"; } || deny "usage: targets <clipboard|primary>"
+    if have xclip && timeout 5 xclip -selection "$1" -t TARGETS -o 2>/dev/null; then exit 0; fi
+    p=""; [ "$1" = primary ] && p=--primary
+    have wl-paste && exec timeout 5 wl-paste $p --list-types
+    exit 1
+    ;;
+  get)
+    { [ $# -eq 2 ] && sel_ok "$1" && type_ok "$2"; } || deny "usage: get <clipboard|primary> <type>"
+    if have xclip && timeout 5 xclip -selection "$1" -t "$2" -o 2>/dev/null; then exit 0; fi
+    p=""; [ "$1" = primary ] && p=--primary
+    case "$2" in TEXT|STRING|UTF8_STRING) t=text ;; *) t=$2 ;; esac
+    have wl-paste && exec timeout 5 wl-paste $p --no-newline --type "$t"
+    exit 1
+    ;;
+  set)
+    { [ $# -eq 1 ] && sel_ok "$1"; } || deny "usage: set <clipboard|primary>"
+    # Keep the data so a second tool can be tried. Both tools fork to keep serving the
+    # selection; detach their output so SSH can return.
+    tmp=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/clipbridge.XXXXXX") || exit 1
+    trap 'rm -f "$tmp"' EXIT
+    cat > "$tmp"
+    if have xclip && xclip -selection "$1" -i < "$tmp" >/dev/null 2>&1; then exit 0; fi
+    p=""; [ "$1" = primary ] && p=--primary
+    have wl-copy && wl-copy $p < "$tmp" >/dev/null 2>&1 && exit 0
+    exit 1
+    ;;
+  *)
+    deny "unknown request '$verb'"
+    ;;
+esac

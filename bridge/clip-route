@@ -18,12 +18,14 @@ if [ -n "${SSH_CONNECTION:-}" ] && [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISP
   exit 1
 fi
 
-# Rule 2: a process that carries this host's own desktop environment, e.g. a session
-# run by a background supervisor that you are viewing from the client. Use the client
-# only if (a) the client holds a live SSH connection to this host AND (b) this host's
-# GNOME desktop has been idle for more than CLIPBRIDGE_IDLE_MS, i.e. the keystroke did
-# not come from this host's own keyboard. Disable with CLIPBRIDGE_DESKTOP_RULE=0.
-[ "${CLIPBRIDGE_DESKTOP_RULE:-1}" = 1 ] || exit 1
+# Rule 2 (OPT-IN, CLIPBRIDGE_DESKTOP_RULE=1): a process that carries this host's own
+# desktop environment, e.g. a session run by a background supervisor that you are
+# viewing from the client. Use the client only if (a) the client holds a live SSH
+# connection to this host AND (b) this host's GNOME desktop has been idle for more than
+# CLIPBRIDGE_IDLE_MS, i.e. the keystroke did not come from this host's own keyboard.
+# Trade-off: while both hold, ANY process of this user with the desktop environment can
+# reach your clipboard, so enable it only on a single-user host you fully trust.
+[ "${CLIPBRIDGE_DESKTOP_RULE:-0}" = 1 ] || exit 1
 
 port=${CLIPBRIDGE_SSH_PORT:-22}
 peers=$(ss -Htn state established "( sport = :$port )" 2>/dev/null | awk '{print $4}')

@@ -1,29 +1,38 @@
 #!/bin/sh
 # clipbridge: xclip shim
-# When clip-route says you are on the client machine, clipboard reads (-o) come from
-# and writes (stdin) go to the client's clipboard over SSH. Writes with file arguments,
-# -version/-help, and everything when you are at this host run the real xclip.
+# When clip-route says you are on your machine (the client), clipboard reads (-o) come
+# from and writes (stdin) go to your machine's clipboard through clipbridge-ssh.
+# Everything else runs the real xclip unchanged: file arguments, the secondary
+# selection, -version/-help, and every call made while you are at this host.
 REAL=${CLIPBRIDGE_REAL_XCLIP:-/usr/bin/xclip}
 BIN=$(dirname "$0")
 
-is_read=0; has_file=0; skip_next=0; passthru=0
+sel=primary; target=""; is_read=0; has_file=0; passthru=0; want=""
 for a in "$@"; do
-  if [ "$skip_next" = 1 ]; then skip_next=0; continue; fi
+  if [ -n "$want" ]; then
+    case "$want" in sel) sel=$a ;; target) target=$a ;; esac
+    want=""; continue
+  fi
   case "$a" in
     -o|-out) is_read=1 ;;
-    -selection|-sel|-t|-target|-d|-display|-l|-loops) skip_next=1 ;;
+    -selection|-sel) want=sel ;;
+    -t|-target) want=target ;;
+    -d|-display|-l|-loops) want=skip ;;
     -version|-h|-help) passthru=1 ;;
     -*) ;;
     *) has_file=1 ;;
   esac
 done
+case "$sel" in c*) sel=clipboard ;; p*) sel=primary ;; *) passthru=1 ;; esac
 
-if [ "$passthru" = 0 ] && { [ "$is_read" = 1 ] || [ "$has_file" = 0 ]; } && "$BIN/clip-route"; then
+if [ "$passthru" = 0 ] && [ "$has_file" = 0 ] && "$BIN/clip-route"; then
   if [ "$is_read" = 1 ]; then
-    exec "$BIN/clipbridge-ssh" xclip "$@"
+    case "$target" in
+      TARGETS) exec "$BIN/clipbridge-ssh" targets "$sel" ;;
+      "") exec "$BIN/clipbridge-ssh" get "$sel" UTF8_STRING ;;
+      *) exec "$BIN/clipbridge-ssh" get "$sel" "$target" ;;
+    esac
   fi
-  # Input mode: xclip forks to serve the selection; send its output away so the SSH
-  # channel closes and the caller is not kept waiting.
-  exec "$BIN/clipbridge-ssh" sh -c 'exec xclip "$@" >/dev/null 2>&1' xclip "$@"
+  exec "$BIN/clipbridge-ssh" set "$sel"
 fi
 exec "$REAL" "$@"

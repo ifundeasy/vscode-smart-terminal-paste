@@ -1,24 +1,24 @@
-# clipbridge config: copy to ~/.config/clipbridge/config on the SSH server.
+# clipbridge config: ~/.config/clipbridge/config on the SSH server.
 # install.sh writes this file for you.
 
 # SSH destination of YOUR machine (the client), as reachable from this server, e.g. a
-# ~/.ssh/config alias or a Tailscale MagicDNS name. `ssh -o BatchMode=yes "$CLIPBRIDGE_HOST" true`
-# must succeed without a prompt.
+# ~/.ssh/config alias or a Tailscale MagicDNS name.
 CLIPBRIDGE_HOST=my-laptop
 
 # Source IP(s) of your machine's SSH connections, as this server sees them: the first
 # field of $SSH_CONNECTION in a shell you opened from your machine. Space-separated.
 CLIPBRIDGE_CLIENT_IPS="100.64.0.2"
 
-# Rule 2 (sessions that carry this server's desktop environment): use your machine's
-# clipboard only if this server's desktop has been idle longer than this (ms).
-# Set CLIPBRIDGE_DESKTOP_RULE=0 to disable rule 2 entirely.
+# Dedicated key. On your machine it is authorized ONLY for clipbridge-serve
+# (restrict,command=...,from=...).
+CLIPBRIDGE_KEY=$HOME/.ssh/clipbridge_ed25519
+
+# Rule 2, opt-in: sessions that carry this server's desktop environment use your
+# clipboard while this desktop has been idle for CLIPBRIDGE_IDLE_MS and your machine
+# holds a live SSH connection here. Only for single-user hosts you fully trust; see
+# docs/remote-clipboard.md.
+CLIPBRIDGE_DESKTOP_RULE=0
 CLIPBRIDGE_IDLE_MS=4000
-CLIPBRIDGE_DESKTOP_RULE=1
 
-# Port this server's sshd listens on (used to detect your live connection).
+# Port this server's sshd listens on (used by rule 2 to detect your live connection).
 CLIPBRIDGE_SSH_PORT=22
-
-# Display names of the desktop session on YOUR machine.
-CLIPBRIDGE_CLIENT_DISPLAY=:0
-CLIPBRIDGE_CLIENT_WAYLAND_DISPLAY=wayland-0

@@ -2,7 +2,7 @@
   "name": "smart-terminal-paste",
   "displayName": "Smart Terminal Paste",
   "description": "One Ctrl+V for the integrated terminal on Linux: pastes text, or forwards Ctrl+V to the running program when the clipboard holds an image (e.g. Claude Code image paste).",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "ifundeasy",
   "license": "MIT",
   "repository": {
